@@ -1,0 +1,10 @@
+---
+game: "testgame"
+platform: "gcm"
+producers: 2
+kafka:
+  brokers: "localhost:9941"
+  linger:
+    ms: 10
+  batch:
+    size: 2097151
