@@ -98,8 +98,12 @@ func main() {
 	h := http.NewServeMux()
 	h.HandleFunc("/healthcheck", healthcheck)
 
+	addr := fmt.Sprintf("%s:%d",
+		config.GetString("server.address.host"),
+		config.GetInt("server.address.port"))
+
 	svr := http.Server{
-		Addr:    "localhost:8080",
+		Addr:    addr,
 		Handler: h,
 	}
 
