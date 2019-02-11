@@ -3,7 +3,7 @@ FROM golang:1.11-alpine AS build-env
 RUN apk update && apk add git make
 
 ENV PUSHER_TESTER_PATH $GOPATH/src/github.com/topfreegames/pusher-tester
-ENV LIBRDKAFKA_VERSION 0.11.5
+ENV LIBRDKAFKA_VERSION 0.11.6
 ENV CPLUS_INCLUDE_PATH /usr/local/include
 
 COPY . $PUSHER_TESTER_PATH
