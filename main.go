@@ -17,6 +17,9 @@ import (
 	"github.com/topfreegames/pusher-tester/generators"
 	producers "github.com/topfreegames/pusher-tester/producers"
 	"github.com/topfreegames/pusher/util"
+
+	"net/http/pprof"
+	_ "net/http/pprof"
 )
 
 var (
@@ -97,6 +100,11 @@ func main() {
 	waitToClose := make(chan struct{})
 	h := http.NewServeMux()
 	h.HandleFunc("/healthcheck", healthcheck)
+	h.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))
+	h.Handle("/debug/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
+	h.Handle("/debug/pprof/profile", http.HandlerFunc(pprof.Profile))
+	h.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
+	h.Handle("/debug/pprof/trace", http.HandlerFunc(pprof.Trace))
 
 	addr := fmt.Sprintf("%s:%d",
 		config.GetString("server.address.host"),
@@ -133,7 +141,7 @@ func startToProduce(
 	for run {
 		msg := generator.Generate()
 		producer.SendMessage(game, generator.Platform(), msg)
-		// time.Sleep(5 * time.Second)
+		// time.Sleep(10 * time.Second)
 	}
 
 	logger.Info("closing producer")

@@ -10,7 +10,7 @@ setup:
 	@echo "Downloading reflex for watching over the files"
 	@go get -u github.com/cespare/reflex
 	
-build: setup
+build: 
 	@go build -o ./bin/pusher-tester main.go
 
 start:

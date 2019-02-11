@@ -23,6 +23,8 @@
 package producers
 
 import (
+	"fmt"
+
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	raven "github.com/getsentry/raven-go"
 	log "github.com/sirupsen/logrus"
@@ -71,6 +73,7 @@ func (q *KafkaProducer) configure(producer interfaces.KafkaProducerClient) error
 	q.loadConfigurationDefaults()
 	q.Brokers = q.Config.GetString("kafka.brokers")
 	q.BatchSize = q.Config.GetInt("kafka.batch.size")
+	fmt.Println("BATCH SIZE: ", q.BatchSize)
 	q.LingerMs = q.Config.GetInt("kafka.linger.ms")
 	c := &kafka.ConfigMap{
 		"queue.buffering.max.kbytes": q.BatchSize,

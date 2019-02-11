@@ -7,7 +7,7 @@ kafka:
   linger:
     ms: 10
   batch:
-    size: 2097151
+    size: 2
 server:
   address:
     host: 0.0.0.0
