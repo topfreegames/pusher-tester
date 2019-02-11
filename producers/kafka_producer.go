@@ -110,13 +110,13 @@ func (q *KafkaProducer) listenForKafkaResponses() {
 					"version":   util.Version,
 					"extension": "kafka-producer",
 				})
-				l.WithError(m.TopicPartition.Error).Error("error sending feedback to kafka")
+				l.WithError(m.TopicPartition.Error).Error("error sending message to kafka")
 			} else {
 				l.WithFields(log.Fields{
 					"topic":     *m.TopicPartition.Topic,
 					"partition": m.TopicPartition.Partition,
 					"offset":    m.TopicPartition.Offset,
-				}).Debug("delivered feedback to topic")
+				}).Debug("delivered message to topic")
 			}
 			break
 		default:

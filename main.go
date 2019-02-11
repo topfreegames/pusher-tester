@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -91,14 +93,31 @@ func main() {
 		go startToProduce(logger, &wg, producer, generator, game)
 	}
 
+	// HTTP Server
 	waitToClose := make(chan struct{})
-	go listenSignalsAndShutDown(waitToClose)
+	h := http.NewServeMux()
+	h.HandleFunc("/healthcheck", healthcheck)
 
-	<-waitToClose
+	svr := http.Server{
+		Addr:    "localhost:8080",
+		Handler: h,
+	}
+
+	go listenSignalsAndShutDown(&svr, logger, waitToClose)
+
+	if err := svr.ListenAndServe(); err != http.ErrServerClosed {
+		logger.WithError(err).Error("Error in ListenAndServe")
+	}
+
 	run = false
 	logger.Info("waiting producers to shut down")
 	wg.Wait()
 	logger.Info("closing application")
+}
+
+func healthcheck(w http.ResponseWriter, r *http.Request) {
+	message := "Working"
+	w.Write([]byte(message))
 }
 
 func startToProduce(
@@ -118,6 +137,7 @@ func startToProduce(
 }
 
 func listenSignalsAndShutDown(
+	srv *http.Server, logger logrus.FieldLogger,
 	c chan<- struct{},
 ) {
 	sigint := make(chan os.Signal, 1)
@@ -128,5 +148,11 @@ func listenSignalsAndShutDown(
 	signal.Notify(sigint, syscall.SIGTERM)
 
 	<-sigint
+
+	if err := srv.Shutdown(context.Background()); err != nil {
+		// Error from closing listeners, or context timeout:
+		logger.WithField("err", err).
+			Error("HTTP server Shutdown")
+	}
 	close(c)
 }

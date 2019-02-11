@@ -6,9 +6,14 @@ import (
 	"github.com/topfreegames/pusher-tester/constants"
 )
 
+type Notification struct {
+	Title string `json:"title"`
+	Body  string `json:"body"`
+}
+
 type KafkaGCMMessage struct {
 	To           string                 `json:"to"`
-	Notification interface{}            `json:"notification"`
+	Notification Notification           `json:"notification"`
 	DryRun       bool                   `json:"dry_run"`
 	Metadata     map[string]interface{} `json:"metadata,omitempty"`
 	PushExpiry   int64                  `json:"push_expiry,omitempty"`
@@ -24,9 +29,12 @@ func (g *GCMMessageGenerator) Generate() []byte {
 	}
 
 	msg := KafkaGCMMessage{
-		To:           to,
-		Notification: `{"title": "Come play!", "body": "Helena miss you! come play!"}`,
-		DryRun:       true,
+		To: to,
+		Notification: Notification{
+			Title: "Come play!",
+			Body:  "Helena miss you! come play!",
+		},
+		DryRun: true,
 		Metadata: map[string]interface{}{
 			"jobId": "77372c1e-c124-4552-b77a-f4775bbad850",
 		},
