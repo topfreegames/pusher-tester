@@ -8,6 +8,13 @@ kafka:
     ms: 10
   batch:
     size: 2
+extensions:
+  kafkaproducer:
+    brokers: "localhost:9941"
+    linger:
+      ms: 10
+    batch:
+      size: 2
 server:
   address:
     host: 0.0.0.0

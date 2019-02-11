@@ -13,9 +13,10 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
+	extensions "github.com/topfreegames/extensions/kafka"
 	"github.com/topfreegames/pusher-tester/constants"
 	"github.com/topfreegames/pusher-tester/generators"
-	producers "github.com/topfreegames/pusher-tester/producers"
+	"github.com/topfreegames/pusher-tester/producers"
 	"github.com/topfreegames/pusher/util"
 
 	"net/http/pprof"
@@ -87,7 +88,7 @@ func main() {
 	run = true
 	prodSize := config.GetInt("producers")
 	for i := 0; i < prodSize; i++ {
-		producer, err := producers.NewKafkaProducer(config, logger, nil)
+		producer, err := producers.NewKafkaProducer(config, logger)
 		if err != nil {
 			panic(fmt.Sprintf("can't start kafka producer: %s", err))
 		}
@@ -134,14 +135,21 @@ func healthcheck(w http.ResponseWriter, r *http.Request) {
 
 func startToProduce(
 	logger logrus.FieldLogger, wg *sync.WaitGroup,
-	producer *producers.KafkaProducer,
+	producer *extensions.SyncProducer,
 	generator generators.MessageGenerator,
 	game string,
 ) {
 	for run {
 		msg := generator.Generate()
-		producer.SendMessage(game, generator.Platform(), msg)
-		// time.Sleep(10 * time.Second)
+		topic := "push-" + game + "_" + generator.Platform() + "-massive"
+		partition, offset, err := producer.Produce(topic, msg)
+		if err != nil {
+			logger.WithError(err).Error("failed to send msg to kafka")
+		}
+		logger.WithFields(logrus.Fields{
+			"partition": partition,
+			"offset":    offset,
+		}).Debug("msg sent to kafka")
 	}
 
 	logger.Info("closing producer")
