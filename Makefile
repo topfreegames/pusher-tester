@@ -9,7 +9,7 @@ setup:
 	@go get -u github.com/axw/gocov/gocov
 	@echo "Downloading reflex for watching over the files"
 	@go get -u github.com/cespare/reflex
-	
+
 build: setup
 	@go build -o ./bin/pusher-tester main.go
 
