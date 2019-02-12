@@ -15,7 +15,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/topfreegames/pusher-tester/constants"
 	"github.com/topfreegames/pusher-tester/generators"
-	producers "github.com/topfreegames/pusher-tester/producers"
+	"github.com/topfreegames/pusher-tester/producers"
 	"github.com/topfreegames/pusher/util"
 
 	"net/http/pprof"
@@ -86,12 +86,13 @@ func main() {
 	var wg sync.WaitGroup
 	run = true
 	prodSize := config.GetInt("producers")
+	producersA := make([]*producers.KafkaProducer, prodSize)
 	for i := 0; i < prodSize; i++ {
-		producer, err := producers.NewKafkaProducer(config, logger, nil)
+		producer, err := producers.NewKafkaProducer(config, logger)
 		if err != nil {
 			panic(fmt.Sprintf("can't start kafka producer: %s", err))
 		}
-
+		producersA[i] = producer
 		wg.Add(1)
 		go startToProduce(logger, &wg, producer, generator, game)
 	}
@@ -124,6 +125,9 @@ func main() {
 	run = false
 	logger.Info("waiting producers to shut down")
 	wg.Wait()
+	for _, p := range producersA {
+		p.Producer.AsyncClose()
+	}
 	logger.Info("closing application")
 }
 

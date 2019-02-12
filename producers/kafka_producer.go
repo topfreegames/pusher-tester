@@ -23,43 +23,30 @@
 package producers
 
 import (
-	"fmt"
+	"time"
 
-	"github.com/confluentinc/confluent-kafka-go/kafka"
-	raven "github.com/getsentry/raven-go"
+	"github.com/Shopify/sarama"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
-	"github.com/topfreegames/pusher/interfaces"
-	"github.com/topfreegames/pusher/util"
 )
-
-// KafkaProducerClient interface
-type KafkaProducerClient interface {
-	Events() chan kafka.Event
-	ProduceChannel() chan *kafka.Message
-}
 
 // KafkaProducer for producing push feedbacks to a kafka queue
 type KafkaProducer struct {
 	Brokers   string
 	Config    *viper.Viper
-	Producer  interfaces.KafkaProducerClient
+	Producer  sarama.AsyncProducer
 	BatchSize int
 	LingerMs  int
 	Logger    *log.Logger
 }
 
 // NewKafkaProducer for creating a new KafkaProducer instance
-func NewKafkaProducer(config *viper.Viper, logger *log.Logger, clientOrNil ...interfaces.KafkaProducerClient) (*KafkaProducer, error) {
+func NewKafkaProducer(config *viper.Viper, logger *log.Logger) (*KafkaProducer, error) {
 	q := &KafkaProducer{
 		Config: config,
 		Logger: logger,
 	}
-	var producer interfaces.KafkaProducerClient
-	if len(clientOrNil) == 1 {
-		producer = clientOrNil[0]
-	}
-	err := q.configure(producer)
+	err := q.configure()
 	return q, err
 }
 
@@ -67,77 +54,65 @@ func (q *KafkaProducer) loadConfigurationDefaults() {
 	q.Config.SetDefault("kafka.brokers", "localhost:9941")
 	q.Config.SetDefault("kafka.linger.ms", 0)
 	q.Config.SetDefault("kafka.batch.size", 1048576)
+	q.Config.SetDefault("kafka.maxMessageBytes", 100000)
 }
 
-func (q *KafkaProducer) configure(producer interfaces.KafkaProducerClient) error {
+func (q *KafkaProducer) configure() error {
 	q.loadConfigurationDefaults()
 	q.Brokers = q.Config.GetString("kafka.brokers")
 	q.BatchSize = q.Config.GetInt("kafka.batch.size")
-	fmt.Println("BATCH SIZE: ", q.BatchSize)
 	q.LingerMs = q.Config.GetInt("kafka.linger.ms")
-	c := &kafka.ConfigMap{
-		"queue.buffering.max.kbytes": q.BatchSize,
-		"linger.ms":                  q.LingerMs,
-		"bootstrap.servers":          q.Brokers,
-	}
+
+	kafkaConf := sarama.NewConfig()
+	kafkaConf.Producer.Return.Errors = true
+	kafkaConf.Producer.Return.Successes = true
+	kafkaConf.Producer.MaxMessageBytes = q.Config.GetInt("kafka.maxMessageBytes")
+	kafkaConf.Producer.Flush.Bytes = q.Config.GetInt("kafka.batch.size")
+	kafkaConf.Producer.Flush.Frequency = time.Duration(q.Config.GetInt("kafka.linger.ms")) * time.Millisecond
+	kafkaConf.Producer.RequiredAcks = sarama.WaitForLocal
+
 	l := q.Logger.WithFields(log.Fields{
 		"brokers": q.Brokers,
 	})
 	l.Debug("configuring kafka producer")
 
-	if producer == nil {
-		p, err := kafka.NewProducer(c)
-		q.Producer = p
-		if err != nil {
-			l.WithError(err).Error("error configuring kafka producer client")
-			return err
-		}
-	} else {
-		q.Producer = producer
+	producer, err := sarama.NewAsyncProducer([]string{q.Brokers}, kafkaConf)
+	if err != nil {
+		return err
 	}
-	go q.listenForKafkaResponses()
+	q.Producer = producer
+
+	go q.listenForKafkaSuccesses()
+	go q.listenForKafkaFailures()
 	l.Info("kafka producer initialized")
 	return nil
 }
 
-func (q *KafkaProducer) listenForKafkaResponses() {
+func (q *KafkaProducer) listenForKafkaSuccesses() {
 	l := q.Logger.WithFields(log.Fields{
-		"method": "listenForKafkaResponses",
+		"method": "listenForKafkaSuccesses",
 	})
-	for e := range q.Producer.Events() {
-		switch ev := e.(type) {
-		case *kafka.Message:
-			m := ev
-			if m.TopicPartition.Error != nil {
-				raven.CaptureError(m.TopicPartition.Error, map[string]string{
-					"version":   util.Version,
-					"extension": "kafka-producer",
-				})
-				l.WithError(m.TopicPartition.Error).Error("error sending message to kafka")
-			} else {
-				l.WithFields(log.Fields{
-					"topic":     *m.TopicPartition.Topic,
-					"partition": m.TopicPartition.Partition,
-					"offset":    m.TopicPartition.Offset,
-				}).Debug("delivered message to topic")
-			}
-			break
-		default:
-			l.WithField("event", ev).Warn("ignored kafka response event")
-		}
+	for range q.Producer.Successes() {
+		l.Info("sent to kafka success")
+	}
+}
+
+func (q *KafkaProducer) listenForKafkaFailures() {
+	l := q.Logger.WithFields(log.Fields{
+		"method": "listenForKafkaFailures",
+	})
+	for e := range q.Producer.Errors() {
+		l.WithField("error", e.Err).Error("sent to kafka failure")
 	}
 }
 
 // SendMessage sends a message to the kafka Queue
 func (q *KafkaProducer) SendMessage(game string, platform string, message []byte) {
 	topic := "push-" + game + "_" + platform + "-massive"
-	m := &kafka.Message{
-		TopicPartition: kafka.TopicPartition{
-			Topic:     &topic,
-			Partition: kafka.PartitionAny,
-		},
-		Value: message,
+	m := &sarama.ProducerMessage{
+		Topic: topic,
+		Value: sarama.ByteEncoder(message),
 	}
 
-	q.Producer.ProduceChannel() <- m
+	q.Producer.Input() <- m
 }
