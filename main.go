@@ -73,7 +73,7 @@ func main() {
 	config.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	config.AutomaticEnv()
 
-	game := config.GetString("game")
+	games := config.GetStringSlice("games")
 	platform := config.GetString("platform")
 	var generator generators.MessageGenerator
 
@@ -86,15 +86,17 @@ func main() {
 	var wg sync.WaitGroup
 	run = true
 	prodSize := config.GetInt("producers")
-	producersA := make([]*producers.KafkaProducer, prodSize)
-	for i := 0; i < prodSize; i++ {
-		producer, err := producers.NewKafkaProducer(config, logger)
-		if err != nil {
-			panic(fmt.Sprintf("can't start kafka producer: %s", err))
+	producersA := make([]*producers.KafkaProducer, 0, prodSize*len(games))
+	for _, game := range games {
+		for i := 0; i < prodSize; i++ {
+			producer, err := producers.NewKafkaProducer(config, logger)
+			if err != nil {
+				panic(fmt.Sprintf("can't start kafka producer: %s", err))
+			}
+			producersA = append(producersA, producer)
+			wg.Add(1)
+			go startToProduce(logger, &wg, producer, generator, game)
 		}
-		producersA[i] = producer
-		wg.Add(1)
-		go startToProduce(logger, &wg, producer, generator, game)
 	}
 
 	// HTTP Server

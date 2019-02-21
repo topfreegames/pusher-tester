@@ -1,5 +1,7 @@
 ---
-game: "testgame"
+games:
+  - "game1"
+  - "game2"
 platform: "gcm"
 producers: 1
 kafka:
